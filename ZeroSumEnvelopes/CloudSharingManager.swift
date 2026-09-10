@@ -1,0 +1,58 @@
+import Foundation
+import CloudKit
+import SwiftData
+import UIKit
+
+/// Thin wrapper around Apple's native UICloudSharingController, used to
+/// invite household members to collaborate on the whole budget — every
+/// account, envelope, and the full transaction history.
+///
+/// ⚠️ CAVEAT: SwiftData's CloudKit sharing surface is newer, less
+/// battle-tested API territory. This is stubbed out pending a real
+/// implementation — double-check the current shape of SwiftData's
+/// share-the-whole-store APIs against Apple's docs for your deployment
+/// target before wiring this up for real.
+@MainActor
+final class CloudSharingManager: NSObject {
+    static let shared = CloudSharingManager()
+
+    private override init() {}
+
+    /// Whether the household's entire budget is currently shared with
+    /// anyone. Placeholder — a real implementation looks this up via
+    /// persistent history or a cached share reference.
+    func hasActiveShare() -> Bool {
+        false
+    }
+
+    func presentShare(
+        modelContext: ModelContext,
+        from presentingViewController: UIViewController,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        // SwiftData does not yet have a native way to share the whole
+        // store. We are stubbing this out so the app compiles.
+        print("Cloud sharing via ModelContext is not natively supported yet.")
+
+        let error = NSError(
+            domain: "CloudSharingManager",
+            code: 1,
+            userInfo: [NSLocalizedDescriptionKey: "Cloud sharing is currently unsupported."]
+        )
+        completion(.failure(error))
+    }
+}
+
+extension CloudSharingManager: UICloudSharingControllerDelegate {
+    func cloudSharingControllerDidSaveShare(_ csc: UICloudSharingController) {}
+
+    func cloudSharingControllerDidStopSharing(_ csc: UICloudSharingController) {}
+
+    func itemTitle(for csc: UICloudSharingController) -> String? {
+        csc.share?[CKShare.SystemFieldKey.title] as? String
+    }
+
+    func cloudSharingController(_ csc: UICloudSharingController, failedToSaveShareWithError error: Error) {
+        print("Failed to save CloudKit share: \(error)")
+    }
+}

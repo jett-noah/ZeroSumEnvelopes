@@ -46,9 +46,6 @@ struct EnvelopeFormView: View {
             if let group = envelope.groupName, existingGroups.contains(group) {
                 _groupChoice = State(initialValue: group)
             } else if let group = envelope.groupName {
-                // A group that isn't in the passed-in list (e.g. this
-                // envelope is currently its only member) — treat it as a
-                // typed-in new group so it isn't lost.
                 _groupChoice = State(initialValue: Self.newGroupTag)
                 _newGroupName = State(initialValue: group)
             } else {
@@ -67,7 +64,7 @@ struct EnvelopeFormView: View {
                     TextField("Envelope Name (e.g. \"Groceries\")", text: $name)
                 }
 
-                Section("Group") {
+                Section {
                     Picker("Group", selection: $groupChoice) {
                         Text("No Group").tag(Self.noGroupTag)
                         ForEach(existingGroups, id: \.self) { group in
@@ -79,6 +76,8 @@ struct EnvelopeFormView: View {
                     if groupChoice == Self.newGroupTag {
                         TextField("Group Name (e.g. \"Fun\")", text: $newGroupName)
                     }
+                } header: {
+                    Text("Group")
                 } footer: {
                     Text("Groups keep related envelopes together, like all your \"Fun\" or \"Car\" envelopes.")
                 }

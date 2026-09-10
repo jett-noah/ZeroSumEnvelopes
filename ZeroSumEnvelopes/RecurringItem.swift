@@ -4,6 +4,7 @@ import SwiftData
 enum RecurringItemType: String, Codable {
     case paycheck
     case subscription
+    case transfer
 }
 
 enum RecurringFrequency: String, Codable {
@@ -20,19 +21,19 @@ final class RecurringItem {
     var nextExecutionDate: Date
     var frequency: RecurringFrequency
 
-    /// Total expected amount — the paycheck's take-home pay, or the
-    /// subscription's charge amount.
     var totalAmount: Double
 
     /// Maps an Envelope's `id.uuidString` to a fixed dollar amount to send
-    /// there. For a subscription this is just one entry at 100% of
-    /// totalAmount. For a paycheck this is the zero-sum split the user
-    /// builds in PaycheckSetupView.
-    ///
-    /// Note: SwiftData stores [String: Double] fine since Double is a
-    /// supported Codable value type, but if this ever needs to hold
-    /// non-primitive values, switch to an external Data blob instead.
+    /// there. For a subscription or transfer this is just one entry at
+    /// 100% of totalAmount (the transfer's destination). For a paycheck
+    /// this is the zero-sum split the user builds in PaycheckSetupView.
     var splits: [String: Double]
+
+    /// Only set when type == .transfer — the envelope funds move OUT of.
+    /// Paychecks have no source (money originates outside the budget);
+    /// a subscription's "source" is implicit — an expense leaving the
+    /// budget rather than moving between envelopes.
+    var sourceEnvelopeIDString: String?
 
     init(
         id: UUID = UUID(),
@@ -41,7 +42,8 @@ final class RecurringItem {
         nextExecutionDate: Date,
         frequency: RecurringFrequency,
         totalAmount: Double,
-        splits: [String: Double] = [:]
+        splits: [String: Double] = [:],
+        sourceEnvelopeIDString: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -50,19 +52,20 @@ final class RecurringItem {
         self.frequency = frequency
         self.totalAmount = totalAmount
         self.splits = splits
+        self.sourceEnvelopeIDString = sourceEnvelopeIDString
     }
 
     var allocatedTotal: Double {
         splits.values.reduce(0, +)
     }
 
-    /// Subscriptions are always considered valid (single destination,
-    /// nothing to balance). Paychecks must exactly zero out — floating
-    /// point tolerance kept tight (half a cent) so real currency rounding
-    /// doesn't accidentally block a valid split.
+    /// Subscriptions and transfers are always considered valid (single
+    /// destination, nothing to balance). Paychecks must exactly zero out —
+    /// floating point tolerance kept tight (half a cent) so real currency
+    /// rounding doesn't accidentally block a valid split.
     var isZeroSumValid: Bool {
         switch type {
-        case .subscription:
+        case .subscription, .transfer:
             return true
         case .paycheck:
             return abs(allocatedTotal - totalAmount) < 0.005

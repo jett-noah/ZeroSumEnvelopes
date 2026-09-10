@@ -1,3 +1,11 @@
+//
+//  ResolveOverdraftView.swift
+//  ZeroSumEnvelopes
+//
+//  Created by Noah Jett on 9/8/26.
+//
+
+
 import SwiftUI
 import SwiftData
 

@@ -1,36 +1,22 @@
 import SwiftUI
 import SwiftData
 
-/// Presented via long-press ("Edit") on a transaction row in
-/// TransactionListView. Edits the transaction in place; the source
-/// envelope picker is scoped to the transaction's own account, the
-/// destination picker (transfers only) covers every account.
-struct EditTransactionView: View {
-    let transaction: Transaction
+struct AddTransactionView: View {
+    let account: Account
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Account.name) private var allAccounts: [Account]
 
-    @State private var type: TransactionType
-    @State private var amount: Double
-    @State private var notes: String
-    @State private var date: Date
+    @AppStorage("displayName") private var displayName: String = ""
+
+    @State private var viewModel: HomeViewModel?
     @State private var selectedEnvelope: Envelope?
     @State private var destinationEnvelope: Envelope?
-
-    private let envelopeOptions: [Envelope]
-
-    init(transaction: Transaction) {
-        self.transaction = transaction
-        _type = State(initialValue: transaction.type)
-        _amount = State(initialValue: transaction.amount)
-        _notes = State(initialValue: transaction.notes)
-        _date = State(initialValue: transaction.date)
-        _selectedEnvelope = State(initialValue: transaction.envelope)
-        _destinationEnvelope = State(initialValue: transaction.destinationEnvelope)
-        envelopeOptions = transaction.envelope?.account?.envelopes.sorted { $0.name < $1.name } ?? []
-    }
+    @State private var type: TransactionType = .expense
+    @State private var amount: Double = 0
+    @State private var notes: String = ""
+    @State private var date: Date = .now
 
     var body: some View {
         NavigationStack {
@@ -45,7 +31,7 @@ struct EditTransactionView: View {
 
                     Picker(type == .transfer ? "From Envelope" : "Envelope", selection: $selectedEnvelope) {
                         Text("Select an envelope").tag(Envelope?.none)
-                        ForEach(envelopeOptions) { envelope in
+                        ForEach(account.envelopes.sorted { $0.name < $1.name }) { envelope in
                             Text(envelope.name).tag(Optional(envelope))
                         }
                     }
@@ -78,7 +64,7 @@ struct EditTransactionView: View {
                     TextField("Optional note", text: $notes)
                 }
             }
-            .navigationTitle("Edit \(titleSuffix)")
+            .navigationTitle(navigationTitleText)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -89,14 +75,19 @@ struct EditTransactionView: View {
                         .disabled(!isValid)
                 }
             }
+            .onAppear {
+                if viewModel == nil {
+                    viewModel = HomeViewModel(modelContext: modelContext)
+                }
+            }
         }
     }
 
-    private var titleSuffix: String {
+    private var navigationTitleText: String {
         switch type {
-        case .income: return "Income"
-        case .expense: return "Expense"
-        case .transfer: return "Transfer"
+        case .expense: return "Add Expense"
+        case .income: return "Add Income"
+        case .transfer: return "Transfer Funds"
         }
     }
 
@@ -112,23 +103,24 @@ struct EditTransactionView: View {
     private func save() {
         guard let selectedEnvelope, amount > 0 else { return }
 
-        if type == .transfer {
+        switch type {
+        case .transfer:
             guard let destinationEnvelope, destinationEnvelope.id != selectedEnvelope.id else { return }
-            transaction.destinationEnvelope = destinationEnvelope
-        } else {
-            transaction.destinationEnvelope = nil
-        }
-
-        transaction.type = type
-        transaction.amount = amount
-        transaction.notes = notes
-        transaction.date = date
-        transaction.envelope = selectedEnvelope
-
-        do {
-            try modelContext.save()
-        } catch {
-            print("Failed to save transaction edit: \(error)")
+            viewModel?.transferFunds(
+                from: selectedEnvelope,
+                to: destinationEnvelope,
+                amount: amount,
+                userDisplayName: displayName.isEmpty ? "Household" : displayName
+            )
+        case .income, .expense:
+            viewModel?.addTransaction(
+                amount: amount,
+                type: type,
+                envelope: selectedEnvelope,
+                notes: notes,
+                userDisplayName: displayName.isEmpty ? "Household" : displayName,
+                date: date
+            )
         }
         dismiss()
     }
