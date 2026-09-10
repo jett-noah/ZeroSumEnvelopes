@@ -1,0 +1,50 @@
+{
+  "fill" : {
+    "linear-gradient" : [
+      "extended-srgb:0.00000,0.76471,0.81569,1.00000",
+      "extended-srgb:0.20392,0.78039,0.34902,1.00000"
+    ]
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "image-name" : "Envelope 2.png",
+          "name" : "Envelope 2",
+          "position" : {
+            "scale" : 2.5,
+            "translation-in-points" : [
+              161.45342083453198,
+              2.5
+            ]
+          }
+        },
+        {
+          "image-name" : "Zero 2.png",
+          "name" : "Zero 2",
+          "position" : {
+            "scale" : 2.5,
+            "translation-in-points" : [
+              -186.45342083453204,
+              0
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.6
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.2
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}
