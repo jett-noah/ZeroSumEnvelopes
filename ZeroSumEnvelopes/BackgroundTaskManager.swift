@@ -2,21 +2,6 @@ import Foundation
 import BackgroundTasks
 import SwiftData
 
-/// Registers and runs the background task that applies recurring
-/// paychecks/subscriptions/transfers on their scheduled dates. Also called
-/// directly from BudgetApp on launch and on returning to the foreground —
-/// BGTaskScheduler isn't guaranteed to run promptly (or at all, for an app
-/// that isn't backgrounded often), so relying on it alone let recurring
-/// items silently fall behind and stay behind.
-///
-/// Setup required outside this file (not something Claude can do for you
-/// from here):
-/// 1. Add the "Background Modes" capability -> "Background fetch" /
-///    "Background processing" in Xcode's Signing & Capabilities tab.
-/// 2. Add a `BGTaskSchedulerPermittedIdentifiers` array to Info.plist
-///    containing the string below (`Self.taskIdentifier`).
-/// 3. Call `BackgroundTaskManager.shared.register(modelContainer:)` from
-///    BudgetApp.init(), before the App's body is ever evaluated.
 final class BackgroundTaskManager {
     static let shared = BackgroundTaskManager()
 
@@ -41,16 +26,20 @@ final class BackgroundTaskManager {
 
     func scheduleNextRun() {
         let request = BGAppRefreshTaskRequest(identifier: Self.taskIdentifier)
+        // A one-hour hint — iOS decides the actual wake time based on the
+        // user's real usage patterns, this isn't a guarantee.
         request.earliestBeginDate = Date(timeIntervalSinceNow: 60 * 60)
 
-        do {
-            try BGTaskScheduler.shared.submit(request)
-        } catch {
-            print("Could not schedule background task: \(error)")
+        BGTaskScheduler.shared.submitTaskRequest(request) { error in
+            if let error {
+                print("Could not schedule background task: \(error)")
+            }
         }
     }
 
     private func handle(task: BGAppRefreshTask) {
+        // Always schedule the next run before doing any work, so a crash
+        // or an expired task doesn't strand the whole automation feature.
         scheduleNextRun()
 
         let processingTask = Task {
@@ -63,12 +52,6 @@ final class BackgroundTaskManager {
         }
     }
 
-    /// One-time cleanup: floors every existing RecurringItem's
-    /// nextExecutionDate to midnight, so items created before automations
-    /// were normalized to midnight (see saveDraft() in
-    /// AutomationViewModel) match the new behavior too. Runs once ever,
-    /// tracked via UserDefaults — safe to call on every launch since it
-    /// no-ops immediately after the first successful run.
     @MainActor
     func migrateExistingRecurringItemDatesToMidnightIfNeeded() {
         guard !UserDefaults.standard.bool(forKey: Self.midnightMigrationKey) else { return }
@@ -100,11 +83,6 @@ final class BackgroundTaskManager {
         UserDefaults.standard.set(true, forKey: Self.midnightMigrationKey)
     }
 
-    /// Catches up every recurring item that's due, applying it repeatedly
-    /// (not just once) until its nextExecutionDate is in the future — so an
-    /// item that's been due for months doesn't just advance by a single
-    /// interval and stay perpetually behind. Not private: also called
-    /// directly from BudgetApp on launch and foreground.
     @MainActor
     func processDueRecurringItems() async {
         guard let modelContainer else { return }
@@ -165,21 +143,22 @@ final class BackgroundTaskManager {
         case .transfer:
             guard
                 let sourceIDString = item.sourceEnvelopeIDString,
-                let sourceEnvelope = envelopesByIDString[sourceIDString],
-                let (destinationIDString, amount) = item.splits.first,
-                let destinationEnvelope = envelopesByIDString[destinationIDString],
-                amount > 0
+                let sourceEnvelope = envelopesByIDString[sourceIDString]
             else { return }
 
-            let transaction = Transaction(
-                amount: amount,
-                type: .transfer,
-                notes: item.title,
-                userDisplayName: "Automation",
-                envelope: sourceEnvelope,
-                destinationEnvelope: destinationEnvelope
-            )
-            context.insert(transaction)
+            for (destinationIDString, amount) in item.splits {
+                guard let destinationEnvelope = envelopesByIDString[destinationIDString], amount > 0 else { continue }
+
+                let transaction = Transaction(
+                    amount: amount,
+                    type: .transfer,
+                    notes: item.title,
+                    userDisplayName: "Automation",
+                    envelope: sourceEnvelope,
+                    destinationEnvelope: destinationEnvelope
+                )
+                context.insert(transaction)
+            }
         }
     }
 

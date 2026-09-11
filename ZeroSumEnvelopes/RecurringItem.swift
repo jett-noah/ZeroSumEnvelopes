@@ -23,16 +23,8 @@ final class RecurringItem {
 
     var totalAmount: Double
 
-    /// Maps an Envelope's `id.uuidString` to a fixed dollar amount to send
-    /// there. For a subscription or transfer this is just one entry at
-    /// 100% of totalAmount (the transfer's destination). For a paycheck
-    /// this is the zero-sum split the user builds in PaycheckSetupView.
     var splits: [String: Double]
 
-    /// Only set when type == .transfer — the envelope funds move OUT of.
-    /// Paychecks have no source (money originates outside the budget);
-    /// a subscription's "source" is implicit — an expense leaving the
-    /// budget rather than moving between envelopes.
     var sourceEnvelopeIDString: String?
 
     init(
@@ -59,10 +51,6 @@ final class RecurringItem {
         splits.values.reduce(0, +)
     }
 
-    /// Subscriptions and transfers are always considered valid (single
-    /// destination, nothing to balance). Paychecks must exactly zero out —
-    /// floating point tolerance kept tight (half a cent) so real currency
-    /// rounding doesn't accidentally block a valid split.
     var isZeroSumValid: Bool {
         switch type {
         case .subscription, .transfer:

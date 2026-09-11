@@ -1,19 +1,6 @@
-//
-//  OverdraftCoveragePrompt.swift
-//  ZeroSumEnvelopes
-//
-//  Created by Noah Jett on 9/10/26.
-//
-
-
 import SwiftUI
 import SwiftData
 
-/// Shown when saving an expense that would push its envelope negative.
-/// Offers to cover the shortfall from another envelope (as a labeled
-/// "Overdraft coverage" transfer) or to proceed and let the envelope go
-/// negative, matching the overdraft-resolution flow already used from
-/// HomeView's banner.
 struct OverdraftCoveragePrompt: View {
     let envelope: Envelope
     let expenseAmount: Double

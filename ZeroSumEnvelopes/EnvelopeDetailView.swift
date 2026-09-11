@@ -3,6 +3,8 @@ import SwiftUI
 struct EnvelopeDetailView: View {
     let envelope: Envelope
 
+    @State private var isAddingTransaction = false
+
     var body: some View {
         VStack(spacing: 0) {
             balanceHeader
@@ -10,6 +12,22 @@ struct EnvelopeDetailView: View {
         }
         .navigationTitle(envelope.name)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                if envelope.account != nil {
+                    Button {
+                        isAddingTransaction = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $isAddingTransaction) {
+            if let account = envelope.account {
+                AddTransactionView(account: account, preselectedEnvelope: envelope)
+            }
+        }
     }
 
     private var balanceHeader: some View {

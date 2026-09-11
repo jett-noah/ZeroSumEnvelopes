@@ -1,18 +1,6 @@
-//
-//  ResolveOverdraftView.swift
-//  ZeroSumEnvelopes
-//
-//  Created by Noah Jett on 9/8/26.
-//
-
-
 import SwiftUI
 import SwiftData
 
-/// Presented from HomeView's overdraft banner when the user taps a specific
-/// overdrawn envelope. Lets them pick another envelope with available funds
-/// and pull money over via HomeViewModel.resolveOverdraft, which records the
-/// move as a Transfer transaction.
 struct ResolveOverdraftView: View {
     let overdrawnEnvelope: Envelope
     var viewModel: HomeViewModel
@@ -20,8 +8,6 @@ struct ResolveOverdraftView: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \Envelope.name) private var allEnvelopes: [Envelope]
 
-    // Same "displayName" key used throughout the app, so the transfer gets
-    // stamped with whoever's using the device.
     @AppStorage("displayName") private var displayName: String = ""
 
     @State private var sourceEnvelope: Envelope?

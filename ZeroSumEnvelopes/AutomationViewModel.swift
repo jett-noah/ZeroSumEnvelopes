@@ -38,7 +38,6 @@ final class AutomationViewModel {
         recurringItems = (try? modelContext.fetch(descriptor)) ?? []
     }
 
-    // MARK: - Draft management
 
     func resetDraft(type: RecurringItemType) {
         editingItem = nil
@@ -52,9 +51,7 @@ final class AutomationViewModel {
         calculateUnallocatedFunds()
     }
 
-    /// Loads an existing item's values into the draft so it can be edited
-    /// in place — saveDraft() will update `item` rather than create a new
-    /// RecurringItem.
+
     func loadDraft(from item: RecurringItem) {
         editingItem = item
         draftTitle = item.title
@@ -92,6 +89,7 @@ final class AutomationViewModel {
         validateZeroSum()
     }
 
+
     func validateZeroSum() {
         switch draftType {
         case .subscription:
@@ -99,17 +97,18 @@ final class AutomationViewModel {
         case .paycheck:
             isValidToSave = draftTotalAmount > 0 && abs(unallocatedAmount) < 0.005
         case .transfer:
-            guard
-                let sourceID = draftSourceEnvelopeID,
-                let destinationID = draftSplits.keys.first,
-                draftSplits.count == 1
-            else {
+            guard let sourceID = draftSourceEnvelopeID, !draftSplits.isEmpty else {
                 isValidToSave = false
                 return
             }
-            isValidToSave = draftTotalAmount > 0 && destinationID != sourceID
+            guard !draftSplits.keys.contains(sourceID) else {
+                isValidToSave = false
+                return
+            }
+            isValidToSave = draftTotalAmount > 0 && abs(unallocatedAmount) < 0.005
         }
     }
+
 
     func quickSweep(to targetEnvelope: Envelope) {
         guard unallocatedAmount != 0 else { return }
@@ -123,10 +122,6 @@ final class AutomationViewModel {
     func saveDraft() {
         guard isValidToSave else { return }
 
-        // Automations always take effect at midnight on their scheduled
-        // date, regardless of what time of day they happened to be
-        // created or edited — the date pickers only show a date, so the
-        // stored value shouldn't carry a hidden, invisible time-of-day.
         let normalizedDate = Calendar.current.startOfDay(for: draftNextExecutionDate)
 
         let splitsByIDString = Dictionary(

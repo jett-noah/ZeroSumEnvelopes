@@ -6,13 +6,9 @@ final class Envelope {
     var id: UUID
     var name: String
 
-    /// User-assigned grouping label (e.g. "Fun", "Car") so related
-    /// envelopes can be shown together. nil means ungrouped.
     var groupName: String?
 
-    /// Optional goal amount for sinking funds (e.g. "Vacation: $2,000").
     var targetAmount: Double?
-    /// Optional deadline paired with targetAmount (e.g. "by June 1").
     var targetDate: Date?
 
     // The parent Account. Inverse of Account.envelopes.

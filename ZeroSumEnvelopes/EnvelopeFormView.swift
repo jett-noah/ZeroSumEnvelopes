@@ -1,8 +1,5 @@
 import SwiftUI
 
-/// Shared form for creating or editing an Envelope — used from both
-/// AccountDetailView's toolbar and SettingsView's envelope management list,
-/// so envelope creation/editing looks and behaves the same everywhere.
 struct EnvelopeFormView: View {
     enum Mode {
         case create

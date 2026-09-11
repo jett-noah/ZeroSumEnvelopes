@@ -31,8 +31,6 @@ final class HomeViewModel {
         overdraftedEnvelopes = envelopes.filter { $0.isOverdrafted }
     }
 
-    // MARK: - Account CRUD
-
     func createAccount(name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
@@ -54,11 +52,7 @@ final class HomeViewModel {
         refresh()
     }
 
-    // MARK: - Transfers
 
-    /// General-purpose move of money between two envelopes — same account
-    /// or different accounts, either direction. Recorded as a single
-    /// Transfer transaction, so it never touches totalNetWorth.
     func transferFunds(
         from sourceEnvelope: Envelope,
         to destinationEnvelope: Envelope,
@@ -83,8 +77,6 @@ final class HomeViewModel {
         refresh()
     }
 
-    /// Thin wrapper kept for the overdraft-resolution flow specifically —
-    /// same underlying transfer as transferFunds(from:to:amount:userDisplayName:).
     func resolveOverdraft(
         from sourceEnvelope: Envelope,
         to overdrawnEnvelope: Envelope,

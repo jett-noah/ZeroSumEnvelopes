@@ -3,24 +3,13 @@ import CloudKit
 import SwiftData
 import UIKit
 
-/// Thin wrapper around Apple's native UICloudSharingController, used to
-/// invite household members to collaborate on the whole budget — every
-/// account, envelope, and the full transaction history.
-///
-/// ⚠️ CAVEAT: SwiftData's CloudKit sharing surface is newer, less
-/// battle-tested API territory. This is stubbed out pending a real
-/// implementation — double-check the current shape of SwiftData's
-/// share-the-whole-store APIs against Apple's docs for your deployment
-/// target before wiring this up for real.
 @MainActor
 final class CloudSharingManager: NSObject {
     static let shared = CloudSharingManager()
 
     private override init() {}
 
-    /// Whether the household's entire budget is currently shared with
-    /// anyone. Placeholder — a real implementation looks this up via
-    /// persistent history or a cached share reference.
+
     func hasActiveShare() -> Bool {
         false
     }

@@ -1,11 +1,6 @@
 import SwiftUI
 import SwiftData
 
-/// Reusable across the app: EnvelopeDetailView passes an `envelope` filter,
-/// HistoryView passes a `user` filter (or nothing, for "all") plus a live
-/// `searchText`. A transaction shows up here if the envelope is either its
-/// source OR (for transfers) its destination, so a transfer is visible in
-/// both envelopes' histories, not just the source's.
 struct TransactionListView: View {
     @Query private var transactions: [Transaction]
     @Environment(\.modelContext) private var modelContext

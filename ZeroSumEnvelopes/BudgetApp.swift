@@ -39,8 +39,10 @@ struct BudgetApp: App {
                     // One-time cleanup for pre-existing items, then the
                     // regular catch-up check. .task lives on the content
                     // view, not the Scene, since Scene has no .task
-                    // modifier.
-                    await BackgroundTaskManager.shared.migrateExistingRecurringItemDatesToMidnightIfNeeded()
+                    // modifier. migrateExisting... isn't async — it's
+                    // @MainActor and this task body already runs there,
+                    // so no `await` is needed for that call.
+                    BackgroundTaskManager.shared.migrateExistingRecurringItemDatesToMidnightIfNeeded()
                     await BackgroundTaskManager.shared.processDueRecurringItems()
                 }
         }

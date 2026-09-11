@@ -1,8 +1,5 @@
 import SwiftUI
 
-/// A single text field for entering comma-separated tags, with a live
-/// preview of the parsed tags as small chips underneath. Used by
-/// AddTransactionView and EditTransactionView.
 struct TagsInputField: View {
     @Binding var tagsText: String
 
@@ -32,8 +29,6 @@ struct TagsInputField: View {
         }
     }
 
-    /// The parsed, trimmed, non-empty tag list — what should actually be
-    /// saved to Transaction.tags.
     static func parse(_ text: String) -> [String] {
         text
             .split(separator: ",")

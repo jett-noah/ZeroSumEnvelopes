@@ -22,9 +22,6 @@ final class SettingsViewModel {
 
     // MARK: - Cloud Sharing
 
-    /// The actual UICloudSharingController presentation happens in
-    /// SettingsView via CloudSharingManager (it needs a UIViewController to
-    /// present from). This just reflects share status back into the UI.
     func refreshShareStatus() {
         cloudShareIsActive = CloudSharingManager.shared.hasActiveShare()
     }

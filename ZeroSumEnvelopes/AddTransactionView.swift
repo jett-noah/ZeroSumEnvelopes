@@ -20,6 +20,11 @@ struct AddTransactionView: View {
     @State private var date: Date = .now
     @State private var isShowingOverdraftPrompt = false
 
+    init(account: Account, preselectedEnvelope: Envelope? = nil) {
+        self.account = account
+        _selectedEnvelope = State(initialValue: preselectedEnvelope)
+    }
+
     var body: some View {
         NavigationStack {
             Form {

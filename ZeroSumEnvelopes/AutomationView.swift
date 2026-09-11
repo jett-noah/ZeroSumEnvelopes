@@ -276,49 +276,70 @@ private struct SubscriptionSetupView: View {
     }
 }
 
+
 private struct TransferSetupView: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \Account.name) private var accounts: [Account]
 
-    var viewModel: AutomationViewModel
+    @Bindable var viewModel: AutomationViewModel
     var item: RecurringItem? = nil
 
-    @State private var title = ""
-    @State private var amount: Double = 0
-    @State private var frequency: RecurringFrequency = .monthly
-    @State private var nextExecutionDate: Date = .now
     @State private var sourceEnvelope: Envelope?
-    @State private var destinationEnvelope: Envelope?
 
     var body: some View {
         NavigationStack {
-            Form {
-                TextField("Title (e.g. \"Vacation Fund\")", text: $title)
-                TextField("Amount", value: $amount, format: .currency(code: "USD"))
-                    .keyboardType(.decimalPad)
-                Picker("Frequency", selection: $frequency) {
-                    Text("Weekly").tag(RecurringFrequency.weekly)
-                    Text("Bi-weekly").tag(RecurringFrequency.biweekly)
-                    Text("Monthly").tag(RecurringFrequency.monthly)
-                }
-                DatePicker("Next Transfer", selection: $nextExecutionDate, displayedComponents: .date)
+            VStack(spacing: 0) {
+                unallocatedBanner
 
-                Picker("From Envelope", selection: $sourceEnvelope) {
-                    Text("Select an envelope").tag(Envelope?.none)
-                    ForEach(accounts) { account in
-                        let envelopes = account.envelopes.sorted { $0.name < $1.name }
-                        if !envelopes.isEmpty {
-                            Section(account.name) {
-                                ForEach(envelopes) { envelope in
-                                    Text(envelope.name).tag(Optional(envelope))
+                Form {
+                    Section("Transfer") {
+                        TextField("Title (e.g. \"Vacation Fund\")", text: $viewModel.draftTitle)
+
+                        TextField(
+                            "Total Amount",
+                            value: $viewModel.draftTotalAmount,
+                            format: .currency(code: "USD")
+                        )
+                        .keyboardType(.decimalPad)
+                        .onChange(of: viewModel.draftTotalAmount) {
+                            viewModel.calculateUnallocatedFunds()
+                        }
+
+                        DatePicker(
+                            "Next Transfer",
+                            selection: $viewModel.draftNextExecutionDate,
+                            displayedComponents: .date
+                        )
+
+                        Picker("Frequency", selection: $viewModel.draftFrequency) {
+                            Text("Weekly").tag(RecurringFrequency.weekly)
+                            Text("Bi-weekly").tag(RecurringFrequency.biweekly)
+                            Text("Monthly").tag(RecurringFrequency.monthly)
+                        }
+
+                        Picker("From Envelope", selection: $sourceEnvelope) {
+                            Text("Select an envelope").tag(Envelope?.none)
+                            ForEach(accounts) { account in
+                                let envelopes = account.envelopes.sorted { $0.name < $1.name }
+                                if !envelopes.isEmpty {
+                                    Section(account.name) {
+                                        ForEach(envelopes) { envelope in
+                                            Text(envelope.name).tag(Optional(envelope))
+                                        }
+                                    }
                                 }
                             }
                         }
+                        .onChange(of: sourceEnvelope) {
+                            if let sourceEnvelope {
+                                viewModel.setSource(sourceEnvelope)
+                                // Can't also send money to the source itself.
+                                viewModel.draftSplits.removeValue(forKey: sourceEnvelope.id)
+                                viewModel.calculateUnallocatedFunds()
+                            }
+                        }
                     }
-                }
 
-                Picker("To Envelope", selection: $destinationEnvelope) {
-                    Text("Select an envelope").tag(Envelope?.none)
                     ForEach(accounts) { account in
                         let envelopes = account.envelopes
                             .filter { $0.id != sourceEnvelope?.id }
@@ -326,7 +347,7 @@ private struct TransferSetupView: View {
                         if !envelopes.isEmpty {
                             Section(account.name) {
                                 ForEach(envelopes) { envelope in
-                                    Text(envelope.name).tag(Optional(envelope))
+                                    envelopeSplitRow(for: envelope)
                                 }
                             }
                         }
@@ -340,50 +361,68 @@ private struct TransferSetupView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
-                        .disabled(!isValid)
+                    Button("Save") {
+                        viewModel.saveDraft()
+                        dismiss()
+                    }
+                    .disabled(!viewModel.isValidToSave)
                 }
             }
             .onAppear {
-                guard let item else { return }
-                title = item.title
-                amount = item.totalAmount
-                frequency = item.frequency
-                nextExecutionDate = item.nextExecutionDate
-                let allEnvelopes = accounts.flatMap { $0.envelopes }
-                if let sourceIDString = item.sourceEnvelopeIDString,
-                   let sourceUUID = UUID(uuidString: sourceIDString) {
-                    sourceEnvelope = allEnvelopes.first { $0.id == sourceUUID }
+                if let item {
+                    viewModel.loadDraft(from: item)
+                } else {
+                    viewModel.resetDraft(type: .transfer)
                 }
-                if let (destinationIDString, _) = item.splits.first,
-                   let destinationUUID = UUID(uuidString: destinationIDString) {
-                    destinationEnvelope = allEnvelopes.first { $0.id == destinationUUID }
-                }
+                sourceEnvelope = accounts
+                    .flatMap { $0.envelopes }
+                    .first { $0.id == viewModel.draftSourceEnvelopeID }
             }
         }
     }
 
-    private var isValid: Bool {
-        guard let sourceEnvelope, let destinationEnvelope else { return false }
-        return !title.isEmpty && amount > 0 && sourceEnvelope.id != destinationEnvelope.id
+    private var unallocatedBanner: some View {
+        HStack {
+            Text("Unallocated")
+                .font(.subheadline)
+            Spacer()
+            Text(viewModel.unallocatedAmount.formatted(.currency(code: "USD")))
+                .font(.subheadline.weight(.semibold))
+        }
+        .padding()
+        .background(bannerColor.opacity(0.15))
+        .foregroundStyle(bannerColor)
     }
 
-    private func save() {
-        guard let sourceEnvelope, let destinationEnvelope, amount > 0 else { return }
+    private var bannerColor: Color {
+        abs(viewModel.unallocatedAmount) < 0.005 ? .green : .orange
+    }
 
-        if let item {
-            viewModel.loadDraft(from: item)
-        } else {
-            viewModel.resetDraft(type: .transfer)
+    @ViewBuilder
+    private func envelopeSplitRow(for envelope: Envelope) -> some View {
+        HStack {
+            Text(envelope.name)
+            Spacer()
+            TextField(
+                "Amount",
+                value: Binding(
+                    get: { viewModel.draftSplits[envelope.id] ?? 0 },
+                    set: { viewModel.setSplit($0, for: envelope) }
+                ),
+                format: .currency(code: "USD")
+            )
+            .keyboardType(.decimalPad)
+            .multilineTextAlignment(.trailing)
+            .frame(maxWidth: 120)
+
+            if abs(viewModel.unallocatedAmount) >= 0.005 {
+                Button {
+                    viewModel.quickSweep(to: envelope)
+                } label: {
+                    Image(systemName: "arrow.down.circle")
+                }
+                .buttonStyle(.borderless)
+            }
         }
-        viewModel.draftTitle = title
-        viewModel.draftTotalAmount = amount
-        viewModel.draftFrequency = frequency
-        viewModel.draftNextExecutionDate = nextExecutionDate
-        viewModel.draftSplits = [:]
-        viewModel.setSource(sourceEnvelope)
-        viewModel.setSplit(amount, for: destinationEnvelope)
-        viewModel.saveDraft()
-        dismiss()
     }
 }

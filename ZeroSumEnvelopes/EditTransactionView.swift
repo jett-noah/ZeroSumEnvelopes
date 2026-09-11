@@ -1,10 +1,6 @@
 import SwiftUI
 import SwiftData
 
-/// Presented via long-press ("Edit") on a transaction row in
-/// TransactionListView. If editing into (or within) an expense that would
-/// overdraw its envelope, offers the same overdraft-coverage prompt as
-/// AddTransactionView.
 struct EditTransactionView: View {
     let transaction: Transaction
 
@@ -132,9 +128,6 @@ struct EditTransactionView: View {
         return true
     }
 
-    /// What `envelope`'s balance would be if this transaction's OLD effect
-    /// on it were undone — used to check whether the NEW amount would
-    /// overdraw it, without double-counting the transaction being edited.
     private func projectedBalance(for envelope: Envelope) -> Double {
         var reversal: Double = 0
         if transaction.envelope?.id == envelope.id {
