@@ -2,9 +2,9 @@ import SwiftUI
 import SwiftData
 
 /// Presented via long-press ("Edit") on a transaction row in
-/// TransactionListView. Edits the transaction in place; the source
-/// envelope picker is scoped to the transaction's own account, the
-/// destination picker (transfers only) covers every account.
+/// TransactionListView. If editing into (or within) an expense that would
+/// overdraw its envelope, offers the same overdraft-coverage prompt as
+/// AddTransactionView.
 struct EditTransactionView: View {
     let transaction: Transaction
 
@@ -12,12 +12,16 @@ struct EditTransactionView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Account.name) private var allAccounts: [Account]
 
+    @AppStorage("displayName") private var displayName: String = ""
+
     @State private var type: TransactionType
     @State private var amount: Double
     @State private var notes: String
+    @State private var tagsText: String
     @State private var date: Date
     @State private var selectedEnvelope: Envelope?
     @State private var destinationEnvelope: Envelope?
+    @State private var isShowingOverdraftPrompt = false
 
     private let envelopeOptions: [Envelope]
 
@@ -26,6 +30,7 @@ struct EditTransactionView: View {
         _type = State(initialValue: transaction.type)
         _amount = State(initialValue: transaction.amount)
         _notes = State(initialValue: transaction.notes)
+        _tagsText = State(initialValue: transaction.tags.joined(separator: ", "))
         _date = State(initialValue: transaction.date)
         _selectedEnvelope = State(initialValue: transaction.envelope)
         _destinationEnvelope = State(initialValue: transaction.destinationEnvelope)
@@ -74,8 +79,9 @@ struct EditTransactionView: View {
                     DatePicker("Date", selection: $date, displayedComponents: .date)
                 }
 
-                Section("Notes") {
+                Section("Notes & Tags") {
                     TextField("Optional note", text: $notes)
+                    TagsInputField(tagsText: $tagsText)
                 }
             }
             .navigationTitle("Edit \(titleSuffix)")
@@ -87,6 +93,23 @@ struct EditTransactionView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
                         .disabled(!isValid)
+                }
+            }
+            .sheet(isPresented: $isShowingOverdraftPrompt) {
+                if let selectedEnvelope {
+                    let base = projectedBalance(for: selectedEnvelope)
+                    OverdraftCoveragePrompt(
+                        envelope: selectedEnvelope,
+                        expenseAmount: amount,
+                        shortfall: amount - base,
+                        onCoverFromEnvelope: { coverageEnvelope in
+                            applyCoverage(from: coverageEnvelope, to: selectedEnvelope, amount: amount - base)
+                            commit(envelope: selectedEnvelope)
+                        },
+                        onProceedAnyway: {
+                            commit(envelope: selectedEnvelope)
+                        }
+                    )
                 }
             }
         }
@@ -109,11 +132,54 @@ struct EditTransactionView: View {
         return true
     }
 
+    /// What `envelope`'s balance would be if this transaction's OLD effect
+    /// on it were undone — used to check whether the NEW amount would
+    /// overdraw it, without double-counting the transaction being edited.
+    private func projectedBalance(for envelope: Envelope) -> Double {
+        var reversal: Double = 0
+        if transaction.envelope?.id == envelope.id {
+            switch transaction.type {
+            case .income:
+                reversal = -transaction.amount
+            case .expense, .transfer:
+                reversal = transaction.amount
+            }
+        } else if transaction.destinationEnvelope?.id == envelope.id {
+            reversal = -transaction.amount
+        }
+        return envelope.currentBalance + reversal
+    }
+
     private func save() {
         guard let selectedEnvelope, amount > 0 else { return }
 
+        if type == .expense {
+            let base = projectedBalance(for: selectedEnvelope)
+            if amount > base {
+                isShowingOverdraftPrompt = true
+                return
+            }
+        }
+
+        commit(envelope: selectedEnvelope)
+    }
+
+    private func applyCoverage(from source: Envelope, to destination: Envelope, amount: Double) {
+        guard amount > 0, source.id != destination.id else { return }
+        let transfer = Transaction(
+            amount: amount,
+            type: .transfer,
+            notes: "Overdraft coverage",
+            userDisplayName: displayName.isEmpty ? "Household" : displayName,
+            envelope: source,
+            destinationEnvelope: destination
+        )
+        modelContext.insert(transfer)
+    }
+
+    private func commit(envelope: Envelope) {
         if type == .transfer {
-            guard let destinationEnvelope, destinationEnvelope.id != selectedEnvelope.id else { return }
+            guard let destinationEnvelope, destinationEnvelope.id != envelope.id else { return }
             transaction.destinationEnvelope = destinationEnvelope
         } else {
             transaction.destinationEnvelope = nil
@@ -122,8 +188,9 @@ struct EditTransactionView: View {
         transaction.type = type
         transaction.amount = amount
         transaction.notes = notes
+        transaction.tags = TagsInputField.parse(tagsText)
         transaction.date = date
-        transaction.envelope = selectedEnvelope
+        transaction.envelope = envelope
 
         do {
             try modelContext.save()

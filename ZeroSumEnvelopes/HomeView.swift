@@ -49,6 +49,10 @@ struct HomeView: View {
                     .padding()
                 }
             }
+            .refreshable {
+                await BackgroundTaskManager.shared.processDueRecurringItems()
+                viewModel?.refresh()
+            }
             .background(Color(.systemGroupedBackground))
             .navigationTitle(navigationTitleText)
             .navigationBarTitleDisplayMode(.inline)

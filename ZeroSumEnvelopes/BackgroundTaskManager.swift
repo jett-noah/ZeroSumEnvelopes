@@ -3,9 +3,11 @@ import BackgroundTasks
 import SwiftData
 
 /// Registers and runs the background task that applies recurring
-/// paychecks/subscriptions/transfers on their scheduled dates, so
-/// automation set up in AutomationView keeps running even when the app
-/// isn't open.
+/// paychecks/subscriptions/transfers on their scheduled dates. Also called
+/// directly from BudgetApp on launch and on returning to the foreground —
+/// BGTaskScheduler isn't guaranteed to run promptly (or at all, for an app
+/// that isn't backgrounded often), so relying on it alone let recurring
+/// items silently fall behind and stay behind.
 ///
 /// Setup required outside this file (not something Claude can do for you
 /// from here):
@@ -19,6 +21,7 @@ final class BackgroundTaskManager {
     static let shared = BackgroundTaskManager()
 
     static let taskIdentifier = "com.household.budget.processRecurringItems"
+    private static let midnightMigrationKey = "hasMigratedRecurringItemDatesToMidnight"
 
     private var modelContainer: ModelContainer?
 
@@ -60,22 +63,73 @@ final class BackgroundTaskManager {
         }
     }
 
+    /// One-time cleanup: floors every existing RecurringItem's
+    /// nextExecutionDate to midnight, so items created before automations
+    /// were normalized to midnight (see saveDraft() in
+    /// AutomationViewModel) match the new behavior too. Runs once ever,
+    /// tracked via UserDefaults — safe to call on every launch since it
+    /// no-ops immediately after the first successful run.
     @MainActor
-    private func processDueRecurringItems() async {
+    func migrateExistingRecurringItemDatesToMidnightIfNeeded() {
+        guard !UserDefaults.standard.bool(forKey: Self.midnightMigrationKey) else { return }
+        guard let modelContainer else { return }
+        let context = ModelContext(modelContainer)
+
+        let descriptor = FetchDescriptor<RecurringItem>()
+        guard let allItems = try? context.fetch(descriptor) else { return }
+
+        let calendar = Calendar.current
+        var didChangeAny = false
+
+        for item in allItems {
+            let midnight = calendar.startOfDay(for: item.nextExecutionDate)
+            if midnight != item.nextExecutionDate {
+                item.nextExecutionDate = midnight
+                didChangeAny = true
+            }
+        }
+
+        if didChangeAny {
+            do {
+                try context.save()
+            } catch {
+                print("Failed to save midnight migration: \(error)")
+            }
+        }
+
+        UserDefaults.standard.set(true, forKey: Self.midnightMigrationKey)
+    }
+
+    /// Catches up every recurring item that's due, applying it repeatedly
+    /// (not just once) until its nextExecutionDate is in the future — so an
+    /// item that's been due for months doesn't just advance by a single
+    /// interval and stay perpetually behind. Not private: also called
+    /// directly from BudgetApp on launch and foreground.
+    @MainActor
+    func processDueRecurringItems() async {
         guard let modelContainer else { return }
         let context = ModelContext(modelContainer)
 
         let now = Date()
-        let descriptor = FetchDescriptor<RecurringItem>(
-            predicate: #Predicate { $0.nextExecutionDate <= now }
-        )
+        let descriptor = FetchDescriptor<RecurringItem>()
+        guard let allItems = try? context.fetch(descriptor) else { return }
 
-        guard let dueItems = try? context.fetch(descriptor) else { return }
+        var didApplyAny = false
 
-        for item in dueItems {
-            apply(item, in: context)
-            item.nextExecutionDate = nextDate(after: item.nextExecutionDate, frequency: item.frequency)
+        for item in allItems {
+            while item.nextExecutionDate <= now {
+                apply(item, in: context)
+                let advanced = nextDate(after: item.nextExecutionDate, frequency: item.frequency)
+                guard advanced > item.nextExecutionDate else {
+                    print("Could not advance nextExecutionDate for recurring item \(item.id) — stopping catch-up.")
+                    break
+                }
+                item.nextExecutionDate = advanced
+                didApplyAny = true
+            }
         }
+
+        guard didApplyAny else { return }
 
         do {
             try context.save()
@@ -93,8 +147,6 @@ final class BackgroundTaskManager {
 
         switch item.type {
         case .paycheck, .subscription:
-            // Paychecks land as income split across envelopes; subscriptions
-            // land as a single expense against their one destination envelope.
             let transactionType: TransactionType = item.type == .paycheck ? .income : .expense
 
             for (envelopeIDString, amount) in item.splits {
@@ -111,8 +163,6 @@ final class BackgroundTaskManager {
             }
 
         case .transfer:
-            // A single source envelope moving funds into a single
-            // destination envelope, possibly in a different account.
             guard
                 let sourceIDString = item.sourceEnvelopeIDString,
                 let sourceEnvelope = envelopesByIDString[sourceIDString],

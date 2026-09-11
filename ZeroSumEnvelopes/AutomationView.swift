@@ -9,6 +9,7 @@ struct AutomationView: View {
     @State private var isAddingSubscription = false
     @State private var isAddingTransfer = false
     @State private var itemPendingEdit: RecurringItem?
+    @State private var itemPendingDelete: RecurringItem?
 
     var body: some View {
         NavigationStack {
@@ -28,7 +29,7 @@ struct AutomationView: View {
                                         Label("Edit", systemImage: "pencil")
                                     }
                                     Button(role: .destructive) {
-                                        viewModel?.deleteRecurringItem(item)
+                                        itemPendingDelete = item
                                     } label: {
                                         Label("Delete", systemImage: "trash")
                                     }
@@ -53,7 +54,7 @@ struct AutomationView: View {
                                         Label("Edit", systemImage: "pencil")
                                     }
                                     Button(role: .destructive) {
-                                        viewModel?.deleteRecurringItem(item)
+                                        itemPendingDelete = item
                                     } label: {
                                         Label("Delete", systemImage: "trash")
                                     }
@@ -78,7 +79,7 @@ struct AutomationView: View {
                                         Label("Edit", systemImage: "pencil")
                                     }
                                     Button(role: .destructive) {
-                                        viewModel?.deleteRecurringItem(item)
+                                        itemPendingDelete = item
                                     } label: {
                                         Label("Delete", systemImage: "trash")
                                     }
@@ -87,6 +88,10 @@ struct AutomationView: View {
                         .onDelete { offsets in delete(transfers, at: offsets) }
                     }
                 }
+            }
+            .refreshable {
+                await BackgroundTaskManager.shared.processDueRecurringItems()
+                viewModel?.refresh()
             }
             .navigationTitle("Automation")
             .navigationBarTitleDisplayMode(.inline)
@@ -135,6 +140,26 @@ struct AutomationView: View {
                     }
                 }
             }
+            .confirmationDialog(
+                "Delete \(itemPendingDelete?.title ?? "this item")?",
+                isPresented: Binding(
+                    get: { itemPendingDelete != nil },
+                    set: { isPresented in if !isPresented { itemPendingDelete = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) {
+                    if let itemPendingDelete {
+                        viewModel?.deleteRecurringItem(itemPendingDelete)
+                    }
+                    itemPendingDelete = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    itemPendingDelete = nil
+                }
+            } message: {
+                Text("This stops the automation. It won't affect transactions it already created.")
+            }
         }
     }
 
@@ -167,10 +192,6 @@ private struct RecurringItemRow: View {
     }
 }
 
-/// A lighter-weight setup flow than PaycheckSetupView — a subscription only
-/// ever needs one destination envelope at 100% of the charge, so there's no
-/// zero-sum split UI to build. Reuses AutomationViewModel's draft/save
-/// machinery rather than a separate persistence path.
 private struct SubscriptionSetupView: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \Account.name) private var accounts: [Account]
@@ -255,11 +276,6 @@ private struct SubscriptionSetupView: View {
     }
 }
 
-/// A recurring envelope-to-envelope transfer — like SubscriptionSetupView,
-/// there's a single destination at 100% of the amount, but this one also
-/// needs an explicit source envelope. Both pickers span every account
-/// (grouped by account name), matching the manual Transfer flow in
-/// AddTransactionView.
 private struct TransferSetupView: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \Account.name) private var accounts: [Account]

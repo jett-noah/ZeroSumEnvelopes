@@ -123,6 +123,12 @@ final class AutomationViewModel {
     func saveDraft() {
         guard isValidToSave else { return }
 
+        // Automations always take effect at midnight on their scheduled
+        // date, regardless of what time of day they happened to be
+        // created or edited — the date pickers only show a date, so the
+        // stored value shouldn't carry a hidden, invisible time-of-day.
+        let normalizedDate = Calendar.current.startOfDay(for: draftNextExecutionDate)
+
         let splitsByIDString = Dictionary(
             uniqueKeysWithValues: draftSplits.map { ($0.key.uuidString, $0.value) }
         )
@@ -131,7 +137,7 @@ final class AutomationViewModel {
         if let editingItem {
             editingItem.title = draftTitle.isEmpty ? defaultTitle(for: draftType) : draftTitle
             editingItem.type = draftType
-            editingItem.nextExecutionDate = draftNextExecutionDate
+            editingItem.nextExecutionDate = normalizedDate
             editingItem.frequency = draftFrequency
             editingItem.totalAmount = draftTotalAmount
             editingItem.splits = splitsByIDString
@@ -140,7 +146,7 @@ final class AutomationViewModel {
             let item = RecurringItem(
                 title: draftTitle.isEmpty ? defaultTitle(for: draftType) : draftTitle,
                 type: draftType,
-                nextExecutionDate: draftNextExecutionDate,
+                nextExecutionDate: normalizedDate,
                 frequency: draftFrequency,
                 totalAmount: draftTotalAmount,
                 splits: splitsByIDString,

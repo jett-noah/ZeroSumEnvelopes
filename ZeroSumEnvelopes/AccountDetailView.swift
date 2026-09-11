@@ -25,8 +25,6 @@ struct AccountDetailView: View {
         Set(envelopes.compactMap { $0.groupName }).sorted()
     }
 
-    /// Ungrouped envelopes sort last; everything else is alphabetical by
-    /// group name so a newly-added group doesn't jump around the list.
     private var groupedEnvelopes: [(group: String, envelopes: [Envelope])] {
         let grouped = Dictionary(grouping: envelopes) { $0.groupName ?? "Ungrouped" }
         return grouped
@@ -40,8 +38,6 @@ struct AccountDetailView: View {
 
     var body: some View {
         List {
-            // Skip section headers until the user actually groups
-            // something — an all-"Ungrouped" list with one header looks odd.
             if groupedEnvelopes.count <= 1 {
                 ForEach(envelopes) { envelope in
                     envelopeRow(for: envelope)
@@ -55,6 +51,9 @@ struct AccountDetailView: View {
                     }
                 }
             }
+        }
+        .refreshable {
+            await BackgroundTaskManager.shared.processDueRecurringItems()
         }
         .navigationTitle("\(account.name) Total: \(account.totalBalance.formatted(.currency(code: "USD")))")
         .navigationBarTitleDisplayMode(.inline)

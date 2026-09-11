@@ -15,10 +15,6 @@ struct BudgetApp: App {
             RecurringItem.self
         ])
 
-        // .automatic lets SwiftData mirror the local store to each user's
-        // private CloudKit database, then CloudSharingManager upgrades a
-        // specific record's zone to a shared one so household members can
-        // collaborate on it.
         let modelConfiguration = ModelConfiguration(
             schema: schema,
             cloudKitDatabase: .automatic
@@ -33,20 +29,32 @@ struct BudgetApp: App {
             fatalError("Could not create ModelContainer: \(error)")
         }
 
-        // Registering the background task's handler must happen before the
-        // app finishes launching — see BackgroundTaskManager.swift's header
-        // comment for the Info.plist / capability setup this depends on.
         BackgroundTaskManager.shared.register(modelContainer: modelContainer)
     }
 
     var body: some Scene {
         WindowGroup {
             MainTabView()
+                .task {
+                    // One-time cleanup for pre-existing items, then the
+                    // regular catch-up check. .task lives on the content
+                    // view, not the Scene, since Scene has no .task
+                    // modifier.
+                    await BackgroundTaskManager.shared.migrateExistingRecurringItemDatesToMidnightIfNeeded()
+                    await BackgroundTaskManager.shared.processDueRecurringItems()
+                }
         }
         .modelContainer(modelContainer)
         .onChange(of: scenePhase) { _, newPhase in
-            if newPhase == .background {
+            switch newPhase {
+            case .active:
+                Task {
+                    await BackgroundTaskManager.shared.processDueRecurringItems()
+                }
+            case .background:
                 BackgroundTaskManager.shared.scheduleNextRun()
+            default:
+                break
             }
         }
     }

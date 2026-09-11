@@ -56,10 +56,15 @@ final class HomeViewModel {
 
     // MARK: - Transfers
 
+    /// General-purpose move of money between two envelopes — same account
+    /// or different accounts, either direction. Recorded as a single
+    /// Transfer transaction, so it never touches totalNetWorth.
     func transferFunds(
         from sourceEnvelope: Envelope,
         to destinationEnvelope: Envelope,
         amount: Double,
+        notes: String = "",
+        tags: [String] = [],
         userDisplayName: String
     ) {
         guard amount > 0, sourceEnvelope.id != destinationEnvelope.id else { return }
@@ -67,6 +72,8 @@ final class HomeViewModel {
         let transferTransaction = Transaction(
             amount: amount,
             type: .transfer,
+            notes: notes,
+            tags: tags,
             userDisplayName: userDisplayName,
             envelope: sourceEnvelope,
             destinationEnvelope: destinationEnvelope
@@ -103,8 +110,6 @@ final class HomeViewModel {
     ) {
         guard amount > 0 else { return }
         guard type != .transfer else {
-            // Transfers need a destination envelope — use transferFunds or
-            // resolveOverdraft instead of this entry point.
             return
         }
 

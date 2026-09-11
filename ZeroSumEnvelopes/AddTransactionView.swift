@@ -16,7 +16,9 @@ struct AddTransactionView: View {
     @State private var type: TransactionType = .expense
     @State private var amount: Double = 0
     @State private var notes: String = ""
+    @State private var tagsText: String = ""
     @State private var date: Date = .now
+    @State private var isShowingOverdraftPrompt = false
 
     var body: some View {
         NavigationStack {
@@ -60,8 +62,9 @@ struct AddTransactionView: View {
                     DatePicker("Date", selection: $date, displayedComponents: .date)
                 }
 
-                Section("Notes") {
+                Section("Notes & Tags") {
                     TextField("Optional note", text: $notes)
+                    TagsInputField(tagsText: $tagsText)
                 }
             }
             .navigationTitle(navigationTitleText)
@@ -78,6 +81,28 @@ struct AddTransactionView: View {
             .onAppear {
                 if viewModel == nil {
                     viewModel = HomeViewModel(modelContext: modelContext)
+                }
+            }
+            .sheet(isPresented: $isShowingOverdraftPrompt) {
+                if let selectedEnvelope {
+                    OverdraftCoveragePrompt(
+                        envelope: selectedEnvelope,
+                        expenseAmount: amount,
+                        shortfall: amount - selectedEnvelope.currentBalance,
+                        onCoverFromEnvelope: { coverageEnvelope in
+                            viewModel?.transferFunds(
+                                from: coverageEnvelope,
+                                to: selectedEnvelope,
+                                amount: amount - selectedEnvelope.currentBalance,
+                                notes: "Overdraft coverage",
+                                userDisplayName: displayName.isEmpty ? "Household" : displayName
+                            )
+                            commit(envelope: selectedEnvelope)
+                        },
+                        onProceedAnyway: {
+                            commit(envelope: selectedEnvelope)
+                        }
+                    )
                 }
             }
         }
@@ -110,18 +135,32 @@ struct AddTransactionView: View {
                 from: selectedEnvelope,
                 to: destinationEnvelope,
                 amount: amount,
+                notes: notes,
+                tags: TagsInputField.parse(tagsText),
                 userDisplayName: displayName.isEmpty ? "Household" : displayName
             )
-        case .income, .expense:
-            viewModel?.addTransaction(
-                amount: amount,
-                type: type,
-                envelope: selectedEnvelope,
-                notes: notes,
-                userDisplayName: displayName.isEmpty ? "Household" : displayName,
-                date: date
-            )
+            dismiss()
+        case .income:
+            commit(envelope: selectedEnvelope)
+        case .expense:
+            if amount > selectedEnvelope.currentBalance {
+                isShowingOverdraftPrompt = true
+            } else {
+                commit(envelope: selectedEnvelope)
+            }
         }
+    }
+
+    private func commit(envelope: Envelope) {
+        viewModel?.addTransaction(
+            amount: amount,
+            type: type,
+            envelope: envelope,
+            notes: notes,
+            tags: TagsInputField.parse(tagsText),
+            userDisplayName: displayName.isEmpty ? "Household" : displayName,
+            date: date
+        )
         dismiss()
     }
 }

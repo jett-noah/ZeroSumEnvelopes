@@ -1,3 +1,11 @@
+//
+//  OverdraftCoveragePrompt.swift
+//  ZeroSumEnvelopes
+//
+//  Created by Noah Jett on 9/10/26.
+//
+
+
 import SwiftUI
 import SwiftData
 
